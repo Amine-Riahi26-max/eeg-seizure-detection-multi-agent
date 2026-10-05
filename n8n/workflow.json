@@ -1,0 +1,852 @@
+{
+  "name": "Multi-Agent System - EEG Epilepsy Seizure Detection",
+  "nodes": [
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"classification\": \"CRISE\",\n  \"confiance\": 0.87,\n  \"justification\": \"Entropie basse et énergie élevée, typique d'une crise\"\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        304,
+        224
+      ],
+      "id": "34d904ac-201d-48ed-aa8c-ea304d974574",
+      "name": "Parser - Classification"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Voici les caractéristiques extraites d'un segment EEG d'1 seconde :\n- Énergie du signal (RMS) : {{ $json.body.energie_rms }}\n- Entropie spectrale : {{ $json.body.entropie_spectrale }}\n- Fréquence dominante (Hz) : {{ $json.body.frequence_dominante_hz }}\n- Score de vraisemblance (formule fixe, 0 à 10) : {{ $json.score_vraisemblance }}\nClassifie ce segment.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Tu es un agent médical spécialisé dans l'analyse de signaux EEG pour la détection de crises d'épilepsie.\n\nTu reçois 3 caractéristiques extraites d'un segment de signal EEG d'1 seconde :\n- energie_rms : l'intensité globale du signal (une énergie élevée peut indiquer une activité électrique anormalement forte)\n- entropie_spectrale : le degré de désordre du signal (une entropie basse indique un signal plus régulier/synchronisé, souvent observé pendant une crise ; une entropie élevée indique un signal plus chaotique, plus typique d'une activité normale)\n- frequence_dominante_hz : la fréquence d'oscillation la plus présente dans le signal\n\nRègle générale à utiliser comme repère (pas une règle stricte, mais une tendance clinique connue) : une entropie spectrale basse combinée à une énergie élevée est évocatrice d'une crise d'épilepsie.\n\nTa mission :\n1. Analyser les 3 valeurs reçues.\n2. Rendre une classification binaire : \"CRISE\" ou \"NON_CRISE\".\n3. Donner un niveau de confiance entre 0 et 1.\n4. Fournir une justification courte (1 à 2 phrases) expliquant ton raisonnement.\n  Un score de vraisemblance de crise (0 à 10), calculé par une formule fixe, t'est fourni avec les caractéristiques. Utilise-le comme indicateur objectif et cite-le explicitement dans ta justification (par exemple : score de vraisemblance 8.4/10).\nD'après une calibration empirique sur 200 segments annotés, un score de vraisemblance supérieur à 2.3 est associé à une crise dans 85% des cas — utilise ce repère comme aide à la décision, en complément de ton propre raisonnement clinique sur les 3 caractéristiques\n",
+          "maxIterations": 4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        400,
+        0
+      ],
+      "id": "cd7ac000-3254-4991-820f-e7942a9ba3b0",
+      "name": "Agent 1 - Classifier",
+      "retryOnFail": false,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "=openai/gpt-oss-120b",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        96,
+        208
+      ],
+      "id": "585cb598-70ca-4aed-a8af-846dfab59077",
+      "name": "Chat Model - Classifier",
+      "credentials": {
+        "groqApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Voici le résultat de l'analyse d'un segment EEG par l'agent classificateur :\n- Classification : {{ $('Agent 1 - Classifier').item.json.output.classification }}\n- Niveau de confiance : {{ $('Agent 1 - Classifier').item.json.output.confiance }}\n- Justification technique : {{ $('Agent 1 - Classifier').item.json.output.justification }}\n{{ $('Agent 1 - Classifier').item.json.output.classification === 'CRISE' ? \"- Référence médicale (Wikipédia) : \" + ($json.extract || \"non disponible\") : \"\" }}\n\nRédige un compte-rendu clinique clair et concis à partir de ces informations.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Tu es un agent rédacteur médical. Tu reçois la classification, le niveau de confiance et la justification technique produits par un agent classificateur d'EEG.\n\nTa mission : rédiger UNE phrase de compte-rendu clinique, claire et professionnelle, comme si elle allait figurer dans le dossier médical d'un patient. Le ton doit être factuel et médical, pas familier.\n\nExemple de style attendu : \"Segment analysé : activité électrique fortement irrégulière avec énergie élevée, suggérant un épisode ictal (confiance 0.85). Recommandation : vérification clinique immédiate.\"\nSi une référence médicale (Wikipédia) est fournie, ajoute à la fin de ton compte-rendu une brève mention tirée de cette source, sans rien inventer.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        784,
+        16
+      ],
+      "id": "ca7359d7-c194-41e8-be55-b636dad628b7",
+      "name": "Agent 2 - Medical Writer",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "model": "=openai/gpt-oss-120b",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        768,
+        272
+      ],
+      "id": "a6be4952-839b-4dcf-b5fc-a8de991daf6b",
+      "name": "Chat Model - Writer",
+      "credentials": {
+        "groqApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"compte_rendu\": \"Segment analysé : activité électrique fortement irrégulière, suggérant un épisode ictal (confiance 0.85). Recommandation : vérification clinique immédiate.\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        928,
+        224
+      ],
+      "id": "74f7cc9f-c2cb-4934-964d-684ee8877434",
+      "name": "Parser - Report"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Voici les résultats de l'analyse d'un segment EEG :\n- Classification : {{ $('Agent 1 - Classifier').item.json.output.classification }}\n- Niveau de confiance : {{ $('Agent 1 - Classifier').item.json.output.confiance }}\n- Compte-rendu clinique : {{ $json.output.compte_rendu }}\n\nDécide de l'action à prendre.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Tu es un agent superviseur responsable de décider de l'action à prendre suite à l'analyse d'un segment EEG par un système de détection de crises d'épilepsie.\n\nTu reçois la classification (CRISE ou NON_CRISE), le niveau de confiance (entre 0 et 1), et un compte-rendu clinique.\n\nApplique cette logique de décision :\n1. Si classification = \"CRISE\" ET confiance >= 0.7 : action = \"ALERTE_IMMEDIATE\" (une vraie crise est probable, il faut alerter sans délai)\n2. Si classification = \"CRISE\" ET confiance < 0.7 : action = \"VERIFICATION_REQUISE\" (suspicion de crise mais incertitude trop grande pour déclencher une alerte, il faut qu'un humain vérifie)\n3. Si classification = \"NON_CRISE\" : action = \"LOG_SIMPLE\" (pas d'action urgente, juste enregistrer le résultat)\n   Tu disposes d'une mémoire des derniers segments analysés. Règle de tendance : si au moins 2 des 3 segments précédents présents en mémoire ont été classés CRISE, considère qu'une crise est en cours et choisis ALERTE_IMMEDIATE pour un segment CRISE, même si sa confiance est comprise entre 0.5 et 0.7. Mentionne cette tendance dans la raison.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1120,
+        16
+      ],
+      "id": "0f5b83f6-328e-4c91-b4fc-2e50aeb7520d",
+      "name": "Agent 3 - Decision Supervisor",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        256
+      ],
+      "id": "ae9862f6-5055-4e57-aa5d-9ff38e4c35e6",
+      "name": "Chat Model - Supervisor",
+      "credentials": {
+        "groqApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"action\": \"ALERTE_IMMEDIATE\",\n  \"raison\": \"Classification CRISE avec confiance élevée (0.85), au-dessus du seuil de 0.7\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1296,
+        224
+      ],
+      "id": "3123d648-d1b6-41ac-b7b6-2cb1164cb4cd",
+      "name": "Parser - Action"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d7ab24f2-7df8-474f-a894-aa9c567c3b82",
+              "leftValue": "={{ $json.output.action }}",
+              "rightValue": "=ALERTE_IMMEDIATE",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1488,
+        16
+      ],
+      "id": "9196b7fd-e8e4-4b48-ac7b-aea88de53b40",
+      "name": "Trigger Alert Condition"
+    },
+    {
+      "parameters": {
+        "fromEmail": "=sender@example.com",
+        "toEmail": "=doctor@example.com",
+        "subject": "=🚨 ALERTE CRISE EEG - Segment {{ $('Webhook - Receive EEG Segment').item.json.body.segment_id }}",
+        "emailFormat": "=html",
+        "html": "={{ $('Agent 2 - Medical Writer').item.json.output.compte_rendu }}\n\nAction décidée : {{ $json.output.action }}\nRaison : {{ $json.output.raison }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1936,
+        -80
+      ],
+      "id": "3d87bb28-5f96-46b8-b332-a8628c3864aa",
+      "name": "Email Alert - Doctor",
+      "webhookId": "00000000-0000-0000-0000-000000000001",
+      "credentials": {
+        "smtp": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "SMTP account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "=ligne_csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        128
+      ],
+      "id": "aa241473-458f-429a-b3ee-77344c746635",
+      "name": "Convert CSV - No Crisis"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/log_segments.csv",
+        "options": {
+          "append": true
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2320,
+        176
+      ],
+      "id": "7fdeede3-5570-4321-94b5-c2c93bf04742",
+      "name": "Write Log - No Crisis"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "=ligne_csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2128,
+        -272
+      ],
+      "id": "e963164f-63bb-4674-8012-24afa73a03a8",
+      "name": "Convert CSV - Alert"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "=eeg-crise ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "dc1f631d-0c3f-495b-8a97-1753c972ae5b",
+      "name": "Webhook - Receive EEG Segment",
+      "webhookId": "00000000-0000-0000-0000-000000000002"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/log_segments.csv",
+        "options": {
+          "append": true
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2352,
+        -272
+      ],
+      "id": "99fa6f38-adc1-4b03-87a0-e303bb529e76",
+      "name": "Write Log - Alert"
+    },
+    {
+      "parameters": {
+        "model": "=openai/gpt-oss-120b",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        272,
+        416
+      ],
+      "id": "9cbed2cd-a0ae-4057-afed-47e2b8e0cdf7",
+      "name": "Chat Model - Format Validator",
+      "credentials": {
+        "groqApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "470f4a3e-69d9-424e-bd7f-4cf3bb3b995b",
+              "name": "segment_id",
+              "value": "={{ $('Webhook - Receive EEG Segment').item.json.body.segment_id }}",
+              "type": "string"
+            },
+            {
+              "id": "76ea7080-05ab-42af-96a6-4ff40977aed7",
+              "name": "label_reel",
+              "value": "={{ $('Webhook - Receive EEG Segment').item.json.body.label_reel }}",
+              "type": "string"
+            },
+            {
+              "id": "dd46cd17-01eb-45a3-817c-1d9da40aeee6",
+              "name": "classification",
+              "value": "={{ $('Agent 1 - Classifier').item.json.output.classification }}",
+              "type": "string"
+            },
+            {
+              "id": "b517d453-745a-4fe0-aea2-bb5f40944189",
+              "name": "confiance",
+              "value": "={{ $('Agent 1 - Classifier').item.json.output.confiance }}",
+              "type": "string"
+            },
+            {
+              "id": "25dc7eb8-2d83-4877-a201-4f4be3393492",
+              "name": "action",
+              "value": "={{ $json.output.action }}",
+              "type": "string"
+            },
+            {
+              "id": "69fe7f2d-7517-418b-bd03-d415108ca33e",
+              "name": "=prompt_version",
+              "value": "v2.0",
+              "type": "string"
+            },
+            {
+              "id": "36fc9546-7fd4-4d71-b085-ac5a00574508",
+              "name": "=timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "78421d4a-0ab7-468c-9c23-1e5cc773f1dc",
+              "name": "=ligne_csv",
+              "value": "={{ [$('Webhook - Receive EEG Segment').item.json.body.segment_id, $('Webhook - Receive EEG Segment').item.json.body.label_reel, $('Agent 1 - Classifier').item.json.output.classification, $('Agent 1 - Classifier').item.json.output.confiance, $json.output.action, 'v1.0', $now.toISO()].join(',') + '\\n' }}",
+              "type": "string"
+            },
+            {
+              "id": "fbb47ba5-d91f-4343-973d-343e034cf0df",
+              "name": "=energie_rms",
+              "value": "={{ $('Compute Likelihood Score').item.json.body.energie_rms }}",
+              "type": "string"
+            },
+            {
+              "id": "7bde94c3-f2fd-4787-995a-76895fe1d62e",
+              "name": "=entropie_spectrale",
+              "value": "={{ $('Compute Likelihood Score').item.json.body.entropie_spectrale }}",
+              "type": "string"
+            },
+            {
+              "id": "a7aa33b4-7d48-4a1f-bccb-b63c1b073e46",
+              "name": "=frequence_dominante_hz",
+              "value": "={{ $('Compute Likelihood Score').item.json.body.frequence_dominante_hz }}",
+              "type": "string"
+            },
+            {
+              "id": "bfe9d5fd-153e-442e-ad55-310f01252650",
+              "name": "=score_vraisemblance",
+              "value": "={{ $('Compute Likelihood Score').item.json.score_vraisemblance }}",
+              "type": "string"
+            },
+            {
+              "id": "920318b2-d663-48c6-a211-8c72c9fe95a4",
+              "name": "=justification",
+              "value": "={{ $('Agent 1 - Classifier').item.json.output.justification }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1760,
+        128
+      ],
+      "id": "c25114b9-0942-4e9c-94d2-6c4285256eba",
+      "name": "Format Log Entry - No Crisis"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "470f4a3e-69d9-424e-bd7f-4cf3bb3b995b",
+              "name": "segment_id",
+              "value": "={{ $('Webhook - Receive EEG Segment').item.json.body.segment_id }}",
+              "type": "string"
+            },
+            {
+              "id": "76ea7080-05ab-42af-96a6-4ff40977aed7",
+              "name": "label_reel",
+              "value": "={{ $('Webhook - Receive EEG Segment').item.json.body.label_reel }}",
+              "type": "string"
+            },
+            {
+              "id": "dd46cd17-01eb-45a3-817c-1d9da40aeee6",
+              "name": "classification",
+              "value": "={{ $('Agent 1 - Classifier').item.json.output.classification }}",
+              "type": "string"
+            },
+            {
+              "id": "b517d453-745a-4fe0-aea2-bb5f40944189",
+              "name": "confiance",
+              "value": "={{ $('Agent 1 - Classifier').item.json.output.confiance }}",
+              "type": "string"
+            },
+            {
+              "id": "25dc7eb8-2d83-4877-a201-4f4be3393492",
+              "name": "action",
+              "value": "={{ $json.output.action }}",
+              "type": "string"
+            },
+            {
+              "id": "dbc016d1-1b04-460d-9564-b8927ef0762e",
+              "name": "=prompt_version",
+              "value": "v2.0",
+              "type": "string"
+            },
+            {
+              "id": "fafaab82-329c-4b1f-978b-72fde7e2db05",
+              "name": "=timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "76b008ca-dcd8-424a-b6e2-6614d70eb024",
+              "name": "=ligne_csv",
+              "value": "={{ [$('Webhook - Receive EEG Segment').item.json.body.segment_id, $('Webhook - Receive EEG Segment').item.json.body.label_reel, $('Agent 1 - Classifier').item.json.output.classification, $('Agent 1 - Classifier').item.json.output.confiance, $json.output.action, 'v1.0', $now.toISO()].join(',') + '\\n' }}",
+              "type": "string"
+            },
+            {
+              "id": "688a81e9-9d82-4212-8d5d-1f20874af5be",
+              "name": "=energie_rms",
+              "value": "={{ $('Compute Likelihood Score').item.json.body.energie_rms }}",
+              "type": "string"
+            },
+            {
+              "id": "7e66e4bd-1bbb-49fd-87ab-e4153de9ad55",
+              "name": "=entropie_spectrale",
+              "value": "={{ $('Compute Likelihood Score').item.json.body.entropie_spectrale }}",
+              "type": "string"
+            },
+            {
+              "id": "aef7d082-ff79-42df-b126-0f40b176d310",
+              "name": "=frequence_dominante_hz",
+              "value": "={{ $('Compute Likelihood Score').item.json.body.frequence_dominante_hz }}",
+              "type": "string"
+            },
+            {
+              "id": "cd8c414b-dd1c-4984-98bb-ef95d121b13f",
+              "name": "=score_vraisemblance",
+              "value": "={{ $('Compute Likelihood Score').item.json.score_vraisemblance }}",
+              "type": "string"
+            },
+            {
+              "id": "0cb3d80d-1375-4b89-8971-339d405edb69",
+              "name": "=justification",
+              "value": "={{ $('Agent 1 - Classifier').item.json.output.justification }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1904,
+        -272
+      ],
+      "id": "46f40443-b656-44db-af41-fc915780b0f5",
+      "name": "Format Log Entry - Alert"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "eeg-monitoring"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        1200,
+        320
+      ],
+      "id": "b998c3b5-5d90-4dc4-acb3-1409e1f9f63d",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "   const b = $input.item.json.body;\n   const energie = Number(b.energie_rms);\n   const entropie = Number(b.entropie_spectrale);\n   const freq = Number(b.frequence_dominante_hz);\n   const facteurFreq = (freq > 3 && freq < 30) ? 1.2 : 0.8;\n   const score = Math.min((energie / 100) * (1 / (entropie + 0.01)) * facteurFreq, 10);\n   return { json: { ...$input.item.json, score_vraisemblance: Number(score.toFixed(2)) } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "d7b5b0d5-628c-4968-ad32-eba6239fee67",
+      "name": "Compute Likelihood Score"
+    },
+    {
+      "parameters": {
+        "url": "https://fr.wikipedia.org/api/rest_v1/page/summary/%C3%89pilepsie",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=User-Agent",
+              "value": "EEG-Projet-ENSIT/1.0 (projet etudiant)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        704,
+        -208
+      ],
+      "id": "eee20552-30ff-400c-ac18-4f72602af586",
+      "name": "Fetch Medical Reference",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Format Log Entry - Alert').isExecuted ? $('Format Log Entry - Alert').first().json : $('Format Log Entry - No Crisis').first().json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2848,
+        -16
+      ],
+      "id": "d96151c1-ddd3-4307-996a-2bf5bca53040",
+      "name": "Send to Dashboard",
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Parser - Classification": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Agent 1 - Classifier",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 1 - Classifier": {
+      "main": [
+        [
+          {
+            "node": "Fetch Medical Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model - Classifier": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 1 - Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 2 - Medical Writer": {
+      "main": [
+        [
+          {
+            "node": "Agent 3 - Decision Supervisor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model - Writer": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 2 - Medical Writer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser - Report": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Agent 2 - Medical Writer",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 3 - Decision Supervisor": {
+      "main": [
+        [
+          {
+            "node": "Trigger Alert Condition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model - Supervisor": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 3 - Decision Supervisor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser - Action": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Agent 3 - Decision Supervisor",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Alert Condition": {
+      "main": [
+        [
+          {
+            "node": "Format Log Entry - Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Alert - Doctor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Log Entry - No Crisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert CSV - No Crisis": {
+      "main": [
+        [
+          {
+            "node": "Write Log - No Crisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Log - No Crisis": {
+      "main": [
+        [
+          {
+            "node": "Send to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert CSV - Alert": {
+      "main": [
+        [
+          {
+            "node": "Write Log - Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Receive EEG Segment": {
+      "main": [
+        [
+          {
+            "node": "Compute Likelihood Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model - Format Validator": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Parser - Classification",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Log Entry - No Crisis": {
+      "main": [
+        [
+          {
+            "node": "Convert CSV - No Crisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Log Entry - Alert": {
+      "main": [
+        [
+          {
+            "node": "Convert CSV - Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agent 3 - Decision Supervisor",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Likelihood Score": {
+      "main": [
+        [
+          {
+            "node": "Agent 1 - Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Medical Reference": {
+      "main": [
+        [
+          {
+            "node": "Agent 2 - Medical Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Log - Alert": {
+      "main": [
+        [
+          {
+            "node": "Send to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "af100acb-abca-48c6-b17b-35d3f4e6e320",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID"
+  },
+  "nodeGroups": [],
+  "id": "S6oPprA1KLbVSMVv",
+  "tags": []
+}

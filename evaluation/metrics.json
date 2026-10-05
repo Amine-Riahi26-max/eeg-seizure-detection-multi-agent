@@ -1,0 +1,37 @@
+{
+  "n_segments": 50,
+  "matrice_confusion": {
+    "vrai_positif": 25,
+    "vrai_negatif": 24,
+    "faux_positif": 1,
+    "faux_negatif": 0
+  },
+  "accuracy": 0.98,
+  "accuracy_ic95": [
+    0.895,
+    0.9965
+  ],
+  "precision": 0.9615,
+  "precision_ic95": [
+    0.8111,
+    0.9932
+  ],
+  "rappel": 1.0,
+  "rappel_ic95": [
+    0.8668,
+    1.0
+  ],
+  "f1_score": 0.9804,
+  "repartition_actions": {
+    "ALERTE_IMMEDIATE": 26,
+    "LOG_SIMPLE": 24
+  },
+  "segments_mal_classes": [
+    {
+      "segment_id": 9752,
+      "label_reel": "NON_CRISE",
+      "classification": "CRISE",
+      "confiance": 0.86
+    }
+  ]
+}

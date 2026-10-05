@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Multi-Agent EEG Seizure Detection: LabVIEW, n8n and LLM agents"
+type: software
+authors:
+  - family-names: "Riahi"
+    given-names: "Amine"
+    affiliation: "ENSIT, Université de Tunis"
+version: 1.0.0
+date-released: 2026-10-04
+license: MIT
+repository-code: "https://github.com/Amine-Riahi26-max/eeg-seizure-detection-multi-agent"
+keywords:
+  - EEG
+  - epilepsy
+  - seizure detection
+  - n8n
+  - LabVIEW
+  - LLM agents

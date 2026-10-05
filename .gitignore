@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets and local config
+.env
+*.key
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# LabVIEW user files
+*.aliases
+*.lvlps
+
+# Full third-party dataset (download it from the original source instead)
+data/Epileptic Seizure Recognition.csv
