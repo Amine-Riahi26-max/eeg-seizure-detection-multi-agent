@@ -48,7 +48,7 @@ This project explores how far a lightweight, transparent chain can go: classic s
 ## Highlights
 
 - **Complete chain.** Signal features in LabVIEW, an HTTP call to an n8n workflow with three LLM agents, an alert email, and a live Google Sheets dashboard.
-- **Grounded LLM reasoning.** A deterministic likelihood score, calibrated on 200 labelled segments, is given to the classifier agent. Used alone, its threshold of 2.3 already reaches 85 % accuracy on the calibration set.
+- **Grounded LLM reasoning.** A deterministic likelihood score, calibrated on 200 labelled segments, is given to the classifier agent. Used alone, its threshold of 2.3 reaches 96 % accuracy on the same 50 evaluation segments (85 % on the calibration set).
 - **Measured, not claimed.** On 50 held-out segments (disjoint from the calibration set): **98 % accuracy, 100 % recall (no missed seizure), 1 false alarm**, with 95 % Wilson confidence intervals.
 - **Auditable decisions.** Explicit rules map classification and confidence to an action, and every row of the journal keeps the agent's justification.
 - **Reproducible.** Data subsets (seed 42), scripts, the exported workflow (secrets removed), the evaluation journal and the metrics are all in this repository.
@@ -83,6 +83,19 @@ Evaluation on the 50 held-out segments (25 seizure, 25 non-seizure). Seizure is 
 The single error is segment 9752 (true class NON_CRISE, predicted CRISE with confidence 0.86). Its features (RMS 179.5, spectral entropy 0.3675) give a likelihood score of 3.8, above the 2.3 threshold, so the pipeline raised a false alarm rather than missing a seizure.
 
 With 50 segments the intervals are wide (the lower bound of the recall is 86.7 %). These numbers show that the approach works on this benchmark. They are not clinical evidence.
+
+### Comparison with the score alone
+
+The same 50 segments, scored by the deterministic threshold alone (score > 2.3, no LLM) and by the full pipeline:
+
+| | Accuracy | Recall | Specificity | Precision | MCC |
+|---|---|---|---|---|---|
+| Score threshold alone (2.3) | 96.00 % | 96.00 % | 96.00 % | 96.00 % | 0.920 |
+| Full pipeline (score + 3 agents) | 98.00 % | 100 % | 96.00 % | 96.15 % | 0.961 |
+
+The score alone separates the two classes very well (AUC 0.990). The pipeline catches one more seizure than the plain threshold, with the same number of false alarms. On 50 segments a one-segment difference is within noise, so the fair reading is that the pipeline is at least as good as the score alone, and also produces a written justification and an action for every segment.
+
+**Protocol.** The 50 evaluation segments are disjoint from the 200 calibration segments and were sent in the order of `data/evaluation_set_tab.csv`. The true label is never sent to an agent: it is only written to the journal after the decision. The prompt was not changed after the evaluation run. Run date: 2 October 2026, model `openai/gpt-oss-120b` on Groq.
 
 ## Architecture
 
@@ -252,6 +265,8 @@ Every segment becomes one row of a 12-column journal: timestamp, `segment_id`, t
 The signals come from the *Epileptic Seizure Recognition* dataset, a re-segmented version of the Bonn University EEG database: 11,500 one-second segments of 178 samples ($f_s$ = 173.61 Hz) in five classes (1 = seizure activity, 2 to 5 = non-seizure). Here classes 2 to 5 are merged into `NON_CRISE`.
 
 > Andrzejak RG, Lehnertz K, Mormann F, Rieke C, David P, Elger CE. *Indications of nonlinear deterministic and finite-dimensional structures in time series of brain electrical activity: Dependence on recording region and brain state.* Physical Review E 64, 061907 (2001).
+
+The calibration and evaluation segments were drawn at random (seed 42) from the 11,500 segments of the dataset, so segments cut from the same original recording can appear in both sets.
 
 Only a 250-segment subset (200 for calibration, 50 for evaluation) is included here for reproducibility. The original data remains subject to its providers' terms: check them before reuse. The MIT license below applies to the code, not to the data.
 
